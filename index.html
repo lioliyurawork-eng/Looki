@@ -294,7 +294,7 @@
         </div>
 
         <div style="margin-top:10px" class="card">
-          <div class="small muted">Бюджет (актуальный меся��)</div>
+          <div class="small muted">Бюджет (актуальный месяц)</div>
           <div id="monthBudget" style="margin-top:8px"></div>
         </div>
       </aside>
@@ -305,7 +305,71 @@
   <div id="modalRoot"></div>
 
 <script>
+/* Diagnostic overlay: shows first runtime JS error or unhandled rejection on the page.
+   This block must run before the main app code so it can catch exceptions early.
+*/
+(function(){
+  const errBox = document.createElement('div');
+  errBox.style.position='fixed';
+  errBox.style.right='12px';
+  errBox.style.bottom='12px';
+  errBox.style.maxWidth='46%';
+  errBox.style.zIndex=99999;
+  errBox.style.background='rgba(220,38,38,0.95)';
+  errBox.style.color='#fff';
+  errBox.style.padding='10px';
+  errBox.style.borderRadius='8px';
+  errBox.style.fontSize='13px';
+  errBox.style.display='none';
+  errBox.style.boxShadow='0 6px 24px rgba(0,0,0,0.6)';
+  errBox.id='jsErrorBox';
+  errBox.innerText = 'JS errors will appear here';
+  function show(msg){
+    errBox.textContent = msg;
+    errBox.style.display='block';
+    console.error(msg);
+  }
+  window.addEventListener('error', e => {
+    const msg = `Error: ${e.message} @ ${e.filename || '<inline>'}:${e.lineno || 0}:${e.colno || 0}`;
+    if (!document.body) {
+      document.addEventListener('DOMContentLoaded', ()=> { document.body.appendChild(errBox); show(msg); });
+    } else {
+      document.body.appendChild(errBox);
+      show(msg);
+    }
+  });
+  window.addEventListener('unhandledrejection', e=>{
+    const r = e.reason;
+    const msg = `UnhandledRejection: ${ (r && r.message) || (typeof r === 'string' ? r : JSON.stringify(r)) }`;
+    if (!document.body) {
+      document.addEventListener('DOMContentLoaded', ()=> { document.body.appendChild(errBox); show(msg); });
+    } else {
+      document.body.appendChild(errBox);
+      show(msg);
+    }
+  });
+  // also append a small close button so user can hide it
+  document.addEventListener('DOMContentLoaded', ()=>{
+    if(!document.getElementById('jsErrorBox')) document.body.appendChild(errBox);
+    const close = document.createElement('button');
+    close.textContent = '✕';
+    close.style.marginLeft='8px';
+    close.style.background='transparent';
+    close.style.border='1px solid rgba(255,255,255,0.25)';
+    close.style.color='#fff';
+    close.style.borderRadius='4px';
+    close.style.cursor='pointer';
+    close.onclick = ()=> { errBox.style.display='none'; };
+    close.title = 'Закрыть';
+    close.style.float='right';
+    // ensure close appears: wrap in setTimeout to allow errBox to be in DOM
+    setTimeout(()=>{ if(errBox && !errBox.querySelector('button')) errBox.appendChild(close); }, 200);
+  });
+})();
+
+/* ---- Main app: run after DOM is ready ---- */
 document.addEventListener('DOMContentLoaded', function() {
+
   /*
     Полнофункциональный single-file шаблон для GitHub Pages.
     Возможности, реализованные клиент-сайдово:
@@ -315,7 +379,7 @@ document.addEventListener('DOMContentLoaded', function() {
     - timestamps: addedAt, purchasedAt, updatedAt
     - purchase history by month
     - recommendations (rule-based)
-    - reminders (локальные): сохраняются и проверяются периодически; испол��зуются Browser Notifications если разрешены
+    - reminders (локальные): сохраняются и проверяются периодически; используются Browser Notifications если разрешены
     - outfits generator (простая комбинация по категориям) + weekly planner
     - capsule helper: создание набора и подсчёт комбинаторики (в интерфейсе будет доступно через консоль/экспорт)
     - export/import JSON
@@ -348,7 +412,7 @@ document.addEventListener('DOMContentLoaded', function() {
   function initIfEmpty(){
     if(!storageGet(KEYS.wardrobe)){
       const sample = {
-        suits:[{ id:1, name:'Костюм черный однотонный', status:'есть', priority:'высокий', tags:'офис,формальный', notes:'', photo:'', addedAt: nowISO(), updatedAt: nowISO(), usageCount:3, wearHistory:[] }],
+        suits:[{ id:1, name:'Костюм черный однотонный', status:'ес��ь', priority:'высокий', tags:'офис,формальный', notes:'', photo:'', addedAt: nowISO(), updatedAt: nowISO(), usageCount:3, wearHistory:[] }],
         shirts:[{ id:2, name:'Рубашка белая', status:'есть', priority:'низкий', tags:'базовый', notes:'', photo:'', addedAt: nowISO(), updatedAt: nowISO(), usageCount:7, wearHistory:[] }],
         knitwear:[], polo:[], pants:[], shoes:[], accessories:[]
       };
@@ -515,7 +579,7 @@ document.addEventListener('DOMContentLoaded', function() {
     modal.innerHTML = `<h3>Редактировать вещь</h3>
     <div style="display:grid;grid-template-columns:1fr 160px;gap:8px;margin-top:8px">
       <input id="editName" type="text" value="${escapeHtml(item.name)}" />
-      <select id="editCategory"><option value="suits">Костюмы</option><option value="shirts">Рубашки</option><option value="knitwear">Трикотаж</option><option value="polo">Поло</option><option value="pants">Брюки</option><option value="shoes">Обувь</option><option value="accessories">Аксессуары</option></select>
+      <select id="editCategory"><option value="suits">Костюмы</option><option value="shirts">Рубашки</option><option value="knitwear">Трикотаж</option><option value="polo">Поло</option><option value="pants">Брюки</option><option value="shoes">Обувь</option><option value="accessories">Аксессуар��</option></select>
       <select id="editStatus"><option value="есть">Есть</option><option value="нужен">Нужен</option></select>
       <select id="editPriority"><option value="низкий">Низкий</option><option value="средний">Средний</option><option value="высокий">Высокий</option><option value="критичный">Критичный</option></select>
       <input id="editTags" type="text" value="${escapeHtml(item.tags||'')}" style="grid-column:1/span2" />
