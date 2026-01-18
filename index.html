@@ -211,6 +211,9 @@
                 <div class="ml-auto small muted">Выбор предложений основан на доступных категориях и тегах</div>
               </div>
               <div id="generatedOutfits" style="margin-top:8px"></div>
+
+              <!-- NEW: container for saved outfits list (was missing before, caused JS error) -->
+              <div id="outfitsList" style="margin-top:12px"></div>
             </div>
           </div>
 
@@ -362,35 +365,12 @@
     close.onclick = ()=> { errBox.style.display='none'; };
     close.title = 'Закрыть';
     close.style.float='right';
-    // ensure close appears: wrap in setTimeout to allow errBox to be in DOM
     setTimeout(()=>{ if(errBox && !errBox.querySelector('button')) errBox.appendChild(close); }, 200);
   });
 })();
 
 /* ---- Main app: run after DOM is ready ---- */
 document.addEventListener('DOMContentLoaded', function() {
-
-  /*
-    Полнофункциональный single-file шаблон для GitHub Pages.
-    Возможности, реализованные клиент-сайдово:
-    - фото (base64) при добавлении/редактировании (сохранение в localStorage)
-    - два режима просмотра: список/сетка
-    - история событий (analytics log) в localStorage
-    - timestamps: addedAt, purchasedAt, updatedAt
-    - purchase history by month
-    - recommendations (rule-based)
-    - reminders (локальные): сохраняются и проверяются периодически; используются Browser Notifications если разрешены
-    - outfits generator (простая комбинация по категориям) + weekly planner
-    - capsule helper: создание набора и подсчёт комбинаторики (в интерфейсе будет доступно через консоль/экспорт)
-    - export/import JSON
-    - данные сохраняются в keys:
-        wardrobe-data-v2
-        shopping-data-v2
-        outfits-data-v2
-        links-data-v2
-        analytics-data-v1
-        reminders-data-v1
-  */
 
   const KEYS = {
     wardrobe: 'wardrobe-data-v2',
@@ -408,11 +388,10 @@ document.addEventListener('DOMContentLoaded', function() {
   function nowISO(){ return new Date().toISOString(); }
   function daysBetween(d1,d2){ return Math.round((new Date(d2)-new Date(d1)) / (1000*60*60*24)); }
 
-  /* init data if missing */
   function initIfEmpty(){
     if(!storageGet(KEYS.wardrobe)){
       const sample = {
-        suits:[{ id:1, name:'Костюм черный однотонный', status:'ес��ь', priority:'высокий', tags:'офис,формальный', notes:'', photo:'', addedAt: nowISO(), updatedAt: nowISO(), usageCount:3, wearHistory:[] }],
+        suits:[{ id:1, name:'Костюм черный однотонный', status:'есть', priority:'высокий', tags:'офис,формальный', notes:'', photo:'', addedAt: nowISO(), updatedAt: nowISO(), usageCount:3, wearHistory:[] }],
         shirts:[{ id:2, name:'Рубашка белая', status:'есть', priority:'низкий', tags:'базовый', notes:'', photo:'', addedAt: nowISO(), updatedAt: nowISO(), usageCount:7, wearHistory:[] }],
         knitwear:[], polo:[], pants:[], shoes:[], accessories:[]
       };
@@ -432,15 +411,12 @@ document.addEventListener('DOMContentLoaded', function() {
   let analytics = storageGet(KEYS.analytics) || [];
   let reminders = storageGet(KEYS.reminders) || [];
 
-  /* ---- Utilities ---- */
   function escapeHtml(s){ if(!s) return ''; return s.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   function flatten(w){ return Object.entries(w).flatMap(([cat,arr]) => (arr||[]).map(it => ({...it, category:cat}))); }
   function pushEvent(type, payload={}){ analytics = storageGet(KEYS.analytics) || []; analytics.unshift({ id:uid(), type, payload, ts: nowISO() }); storageSet(KEYS.analytics, analytics); renderEvents(); }
 
-  /* ---- Photo handling: file -> dataURL ---- */
   function fileToDataURL(file){ return new Promise(resolve => { const r=new FileReader(); r.onload = ()=>resolve(r.result); r.readAsDataURL(file); }); }
 
-  /* ---- Add item ---- */
   document.getElementById('addItemBtn').addEventListener('click', async ()=>{
     const name = (document.getElementById('newName').value||'').trim(); if(!name){ alert('Введите название'); return; }
     const category = document.getElementById('newCategory').value;
@@ -461,7 +437,6 @@ document.addEventListener('DOMContentLoaded', function() {
   });
   function clearAddForm(){ document.getElementById('newName').value=''; document.getElementById('newTags').value=''; document.getElementById('newNotes').value=''; document.getElementById('newPhoto').value=''; }
 
-  /* ---- Render items (list & grid) ---- */
   let viewMode = 'list';
   const listViewBtn = document.getElementById('listViewBtn');
   const gridViewBtn = document.getElementById('gridViewBtn');
@@ -487,9 +462,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if(statusFilter !== 'all') shown = shown.filter(i => i.status === statusFilter);
     if(prFilter !== 'all') shown = shown.filter(i => i.priority === prFilter);
 
-    // LIST
     const list = document.getElementById('itemsList'); list.innerHTML = '';
-    // GRID
     const grid = document.getElementById('itemsGrid'); grid.innerHTML = '';
 
     if(shown.length === 0){
@@ -499,7 +472,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     shown.forEach(it=>{
-      // list item
       const li = document.createElement('div'); li.className = 'item';
       const photoDiv = document.createElement('div'); photoDiv.className='item-photo';
       if(it.photo){ const img = document.createElement('img'); img.src = it.photo; img.alt=''; img.style.width='100%'; img.style.height='100%'; img.style.objectFit='cover'; img.style.borderRadius='8px'; photoDiv.appendChild(img); } else { photoDiv.textContent = '🖼'; }
@@ -520,7 +492,6 @@ document.addEventListener('DOMContentLoaded', function() {
       li.appendChild(photoDiv); li.appendChild(info);
       list.appendChild(li);
 
-      // grid card
       const card = document.createElement('div'); card.className='grid-card';
       const p = document.createElement('div'); p.className='card-photo';
       if(it.photo){ const img = document.createElement('img'); img.src = it.photo; img.alt=''; img.style.width='100%'; img.style.height='100%'; img.style.objectFit='cover'; p.appendChild(img); } else { p.textContent='🖼'; }
@@ -536,7 +507,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  /* ---- Delete item ---- */
   function deleteItem(id){
     Object.keys(wardrobe).forEach(cat=>{
       wardrobe[cat] = (wardrobe[cat]||[]).filter(i=>i.id!==id);
@@ -545,7 +515,6 @@ document.addEventListener('DOMContentLoaded', function() {
     pushEvent('delete_item', { id }); renderAll();
   }
 
-  /* ---- Mark worn (wear history) ---- */
   function markWorn(id){
     let found=null; let catKey=null;
     for(const [cat,arr] of Object.entries(wardrobe)){
@@ -565,7 +534,6 @@ document.addEventListener('DOMContentLoaded', function() {
     renderAll();
   }
 
-  /* ---- Edit modal (with photo replace/delete) ---- */
   function openEditModal(id){
     let item=null, catKey=null;
     for(const [cat,arr] of Object.entries(wardrobe)){
@@ -579,7 +547,7 @@ document.addEventListener('DOMContentLoaded', function() {
     modal.innerHTML = `<h3>Редактировать вещь</h3>
     <div style="display:grid;grid-template-columns:1fr 160px;gap:8px;margin-top:8px">
       <input id="editName" type="text" value="${escapeHtml(item.name)}" />
-      <select id="editCategory"><option value="suits">Костюмы</option><option value="shirts">Рубашки</option><option value="knitwear">Трикотаж</option><option value="polo">Поло</option><option value="pants">Брюки</option><option value="shoes">Обувь</option><option value="accessories">Аксессуар��</option></select>
+      <select id="editCategory"><option value="suits">Костюмы</option><option value="shirts">Рубашки</option><option value="knitwear">Трикотаж</option><option value="polo">Поло</option><option value="pants">Брюки</option><option value="shoes">Обувь</option><option value="accessories">Аксессуары</option></select>
       <select id="editStatus"><option value="есть">Есть</option><option value="нужен">Нужен</option></select>
       <select id="editPriority"><option value="низкий">Низкий</option><option value="средний">Средний</option><option value="высокий">Высокий</option><option value="критичный">Критичный</option></select>
       <input id="editTags" type="text" value="${escapeHtml(item.tags||'')}" style="grid-column:1/span2" />
@@ -618,7 +586,6 @@ document.addEventListener('DOMContentLoaded', function() {
       const newNotes = (document.getElementById('editNotes').value||'').trim();
       const photoInput = document.getElementById('editPhotoInput');
       if(photoInput.files && photoInput.files[0]){ item.photo = await fileToDataURL(photoInput.files[0]); }
-      // move category if changed
       if(newCat !== catKey){
         wardrobe[catKey] = (wardrobe[catKey]||[]).filter(i=>i.id!==item.id);
         item.name = newName; item.status=newStatus; item.priority=newPriority; item.tags=newTags; item.notes=newNotes; item.updatedAt = nowISO();
@@ -636,7 +603,6 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   function closeModal(){ document.getElementById('modalRoot').innerHTML = ''; }
 
-  /* ---- Shopping: add/toggle/purchasedAt and reminders ---- */
   document.getElementById('addShopBtn').addEventListener('click', ()=>{
     const name = (document.getElementById('shopName').value||'').trim(); if(!name) return alert('Введите что купить');
     const priority = document.getElementById('shopPriority').value; const price = (document.getElementById('shopPrice').value||'').trim();
@@ -679,7 +645,6 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   function removeShopping(id){ shopping = storageGet(KEYS.shopping) || []; shopping = shopping.filter(s=>s.id!==id); storageSet(KEYS.shopping, shopping); renderShopping(); }
 
-  /* ---- Outfits generator & planner ---- */
   document.getElementById('generateBtn').addEventListener('click', ()=> generateOutfits());
   document.getElementById('addOutfitBtn').addEventListener('click', ()=>{
     const name = (document.getElementById('outfitName').value||'').trim(); if(!name) return alert('Введите имя образа');
@@ -688,19 +653,14 @@ document.addEventListener('DOMContentLoaded', function() {
     outfits = storageGet(KEYS.outfits) || []; outfits.push({ id:uid(), name, items: itemsRaw, season, createdAt: nowISO() }); storageSet(KEYS.outfits, outfits); document.getElementById('outfitName').value=''; document.getElementById('outfitItems').value=''; renderOutfits();
   });
   function generateOutfits(){
-    const occasion = document.getElementById('generatorOccasion').value || '';
     const all = flatten(storageGet(KEYS.wardrobe)||wardrobe).filter(i=>i.status==='есть');
-    // simple heuristics: build combinations of [suits|shirts] + pants + shoes etc.
     const suits = all.filter(i=>i.category==='suits');
     const shirts = all.filter(i=>i.category==='shirts');
     const pants = all.filter(i=>i.category==='pants');
     const shoes = all.filter(i=>i.category==='shoes');
     const suggestions = [];
-    // generate suit outfits
     suits.forEach(s=>{ shirts.forEach(sh=>{ shoes.forEach(sho=>{ suggestions.push({ items:[s,sh,sho], score: (s.usageCount||0)+(sh.usageCount||0)+(sho.usageCount||0) }); }); }); });
-    // business casual: shirt + pants + shoes
     shirts.forEach(sh=>{ pants.forEach(p=>{ shoes.forEach(sho=>{ suggestions.push({ items:[sh,p,sho], score:(sh.usageCount||0)+(p.usageCount||0)+(sho.usageCount||0) }); }); }); });
-    // sort by score descending (more used items first)
     suggestions.sort((a,b)=>b.score - a.score);
     const container = document.getElementById('generatedOutfits'); container.innerHTML = '';
     suggestions.slice(0,8).forEach((sug, idx)=>{
@@ -713,7 +673,8 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   function renderOutfits(){
     outfits = storageGet(KEYS.outfits) || [];
-    const cont = document.getElementById('outfitsList'); cont.innerHTML = '';
+    const cont = document.getElementById('outfitsList') || document.getElementById('generatedOutfits') || document.body;
+    cont.innerHTML = '';
     if(outfits.length===0){ cont.innerHTML = '<div class="muted">Нет образов</div>'; return; }
     outfits.forEach(o=>{
       const div = document.createElement('div'); div.className='card'; div.style.marginBottom='8px';
@@ -723,7 +684,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  /* Weekly planner: simple mapping day->outfitId */
   const WEEK_DAYS = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
   function renderWeekPlanner(){
     const planner = JSON.parse(localStorage.getItem('wardrobe-planner') || '{}');
@@ -742,18 +702,15 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  /* ---- Recommendations ---- */
   function computeRecommendations(){
     wardrobe = storageGet(KEYS.wardrobe) || wardrobe;
     const items = flatten(wardrobe);
     const recs = [];
-    // basics check
     const basicCats = ['suits','shirts','pants','shoes'];
     basicCats.forEach(cat=>{
       const cnt = (wardrobe[cat]||[]).filter(i=>i.status==='есть').length;
       if(cnt === 0) recs.push({ type:'missing_basic', text:`У вас отсутствуют базовые вещи: ${cat}` });
     });
-    // update suggestion by age: if median age > 3 years (1095 days)
     const byCat = {};
     Object.entries(wardrobe).forEach(([cat,arr]) => { byCat[cat] = arr||[]; });
     Object.entries(byCat).forEach(([cat,arr])=>{
@@ -762,11 +719,9 @@ document.addEventListener('DOMContentLoaded', function() {
       const median = ages.sort((a,b)=>a-b)[Math.floor(ages.length/2)] || 0;
       if(median > 365*3) recs.push({ type:'old_category', text:`В категории ${cat} вещи в среднем старые (≈ ${Math.round(median/365)} лет). Подумайте об обновлении.` });
     });
-    // critical purchases
     const crit = (storageGet(KEYS.shopping)||[]).filter(s=> (s.priority||'').toString().toLowerCase().includes('крит'));
     if(crit.length) recs.push({ type:'criticals', text:`Критичные покупки: ${crit.map(c=>c.item).slice(0,5).join(', ')}` });
 
-    // tag frequency analysis
     const tags = {};
     items.forEach(i=> (i.tags||'').split(',').map(t=>t.trim().toLowerCase()).filter(Boolean).forEach(t => tags[t] = (tags[t]||0)+1));
     const sortedTags = Object.entries(tags).sort((a,b)=>b[1]-a[1]);
@@ -778,7 +733,6 @@ document.addEventListener('DOMContentLoaded', function() {
     return recs;
   }
 
-  /* ---- Analytics UI ---- */
   function renderEvents(){
     analytics = storageGet(KEYS.analytics) || [];
     const el = document.getElementById('eventsLog'); el.innerHTML = '';
@@ -789,7 +743,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  /* purchases by month */
   function renderPurchasesByMonth(){
     shopping = storageGet(KEYS.shopping) || [];
     const bought = shopping.filter(s=>s.purchased && s.purchasedAt);
@@ -807,7 +760,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  /* ---- Recommendations UI ---- */
   function renderRecommendations(){
     const recs = computeRecommendations();
     const cont = document.getElementById('recommendations'); cont.innerHTML = '';
@@ -819,7 +771,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  /* ---- Sidebar tags ---- */
   function renderTopTags(){
     const items = flatten(storageGet(KEYS.wardrobe) || wardrobe);
     const map = {};
@@ -830,7 +781,6 @@ document.addEventListener('DOMContentLoaded', function() {
     arr.forEach(a=>{ const d=document.createElement('div'); d.className='small muted'; d.textContent = `#${a[0]} — ${a[1]}`; el.appendChild(d); });
   }
 
-  /* ---- Analytics totals ---- */
   function renderAnalytics(){
     const items = flatten(storageGet(KEYS.wardrobe) || wardrobe);
     const total = items.length;
@@ -842,13 +792,11 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('anNeeded').textContent = needed;
     document.getElementById('anCritical').textContent = critical;
 
-    // sidebar summary
     document.getElementById('statTotal').textContent = `${total} вещей`;
     const completion = total? Math.round((owned/total)*100):0;
     document.getElementById('statCompletion').textContent = `${completion}%`;
   }
 
-  /* ---- Export / Import JSON ---- */
   document.getElementById('exportJsonBtn').addEventListener('click', ()=>{
     const payload = {
       wardrobe: storageGet(KEYS.wardrobe) || {},
@@ -870,7 +818,6 @@ document.addEventListener('DOMContentLoaded', function() {
     input.click();
   });
 
-  /* ---- Events / render orchestration ---- */
   function renderAll(){
     wardrobe = storageGet(KEYS.wardrobe) || wardrobe;
     shopping = storageGet(KEYS.shopping) || shopping;
@@ -880,7 +827,7 @@ document.addEventListener('DOMContentLoaded', function() {
     renderItems();
     renderShopping();
     renderOutfits();
-    renderOutfits(); // twice for safety
+    renderOutfits();
     renderEvents();
     renderPurchasesByMonth();
     renderRecommendations();
@@ -891,14 +838,12 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   renderAll();
 
-  /* ---- Reminders: local check and browser notifications ---- */
   document.getElementById('enableNotifBtn').addEventListener('click', async ()=>{
     if(!('Notification' in window)){ alert('Ваш браузер не поддерживает уведомления'); return; }
     const res = await Notification.requestPermission();
     if(res === 'granted') alert('Уведомления включены'); else alert('Уведомления не предоставлены');
   });
 
-  /* reminders storage, add simple reminder for shopping item */
   function addReminderForShopping(shoppingId, whenISO){
     reminders = storageGet(KEYS.reminders) || [];
     reminders.push({ id: uid(), type:'shopping', targetId: shoppingId, when: whenISO, sent:false });
@@ -906,14 +851,12 @@ document.addEventListener('DOMContentLoaded', function() {
     pushEvent('add_reminder', { id: shoppingId, when: whenISO });
   }
 
-  /* scheduled check every minute for due reminders (works while page is open) */
   setInterval(checkReminders, 60*1000);
   function checkReminders(){
     reminders = storageGet(KEYS.reminders) || [];
     const now = new Date();
     reminders.forEach(r=>{
       if(!r.sent && new Date(r.when) <= now){
-        // show notification
         showNotification(`Напоминание`, r.type === 'shopping' ? `Не забудьте покупку: ${getShoppingTitle(r.targetId)}` : 'Напоминание');
         r.sent = true;
         pushEvent('reminder_sent', { id: r.id });
@@ -930,7 +873,6 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   function getShoppingTitle(id){ const s = (storageGet(KEYS.shopping)||[]).find(x=>x.id===id); return s? s.item : 'покупка'; }
 
-  /* ---- Analytics rendering helpers ---- */
   function renderMonthBudget(){
     shopping = storageGet(KEYS.shopping) || [];
     const monthKey = (()=>{ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })();
@@ -939,7 +881,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const el = document.getElementById('monthBudget'); el.innerHTML = `<div class="small muted">Потрачено в ${monthKey}: <strong>${total ? total.toFixed(2) : '0'}</strong></div>`;
   }
 
-  /* ---- Tabs switching ---- */
   const tabs = document.querySelectorAll('.tab');
   function showTab(name){
     ['wardrobe','shopping','outfits','analytics','settings'].forEach(id=>{
@@ -947,26 +888,20 @@ document.addEventListener('DOMContentLoaded', function() {
       if(el) el.style.display = (id === name) ? 'block' : 'none';
     });
     tabs.forEach(t=> t.classList.toggle('active', t.dataset.tab === name));
-    // re-render specific if needed
     if(name==='analytics'){ renderAll(); }
   }
   tabs.forEach(t=> t.addEventListener('click', ()=> showTab(t.dataset.tab)));
 
-  /* ---- Helper render calls for UI initial bindings ---- */
   document.getElementById('search').addEventListener('input', renderItems);
   document.getElementById('filterStatus').addEventListener('change', renderItems);
   document.getElementById('filterPriority').addEventListener('change', renderItems);
 
-  /* expose some globals for debugging/testing in console */
   window._WARDROBE = wardrobe;
   window._SHOPPING = shopping;
   window._OUTFITS = outfits;
   window.pushEvent = pushEvent;
 
-  /* initial small cron: check reminders on load */
   checkReminders();
-
-  /* Accessibility: escape key closes modal */
   window.addEventListener('keydown', (e)=>{ if(e.key === 'Escape'){ closeModal(); } });
 
 }); // end DOMContentLoaded
